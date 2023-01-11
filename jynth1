@@ -1,0 +1,106 @@
+desc:based on MIDI Note Filter and tone generator
+//tags: MIDI Audio synth
+//author: Jicawi
+
+slider1:21<0,127,1>Lowest Key (MIDI Note #)
+slider2:108<0,127,1>Highest Key (MIDI Note #)
+slider3:0<0,1,1{No,Yes}>Other events (CC, etc) pass through
+
+// This effect Copyright (C) 2004 and later Cockos Incorporated
+// License: LGPL - http://www.gnu.org/licenses/lgpl.html
+
+desc: Tone Generator
+//tags: analysis generator synthesis
+//author: Cockos
+
+slider8:-12<-120,6,1>Wet Mix (dB)
+slider9:-6<-120,6,1>Dry Mix (dB)
+slider10:440<20,24000,1>Base Frequency (Hz)
+slider4:0<0,11,1{A,A#,B,C,C#,D,D#,E,F,F#,G,G#}>Note
+slider5:0<-4,4,1>Octave
+slider6:0<-100,100,1>Fine Tune (cents)
+slider7:0<0,2,1{Sine,Triangle,Saw}>Shape
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output
+
+@slider
+  vol=2 ^ (slider8/6);
+  dry=2 ^ (slider9/6);  
+  adjbase = 2.0*$pi*(2^(slider5+slider4/12+slider6/1200))/srate;
+  
+@init
+NOTE_OFF = 8;
+NOTE_ON = 9;
+
+was_filtered = 1024;  // array for storing which notes are filtered
+
+last_note_on = 0;
+
+
+@sample
+
+last_note_on == 1 ? (
+
+(slider7 < 0.67) ? (
+  tone = cos(pos);
+) :
+(slider7 < 1.33) ? (
+  tone = 2.0*pos/$pi-1.0;
+  (tone > 1.0) ? tone = 2.0-tone;
+) : (
+  tone = 1.0-pos/$pi;
+);
+
+tone *= vol;
+spl0 = tone+spl0*dry;
+spl1 = tone+spl1*dry;
+
+pos=pos+adj;
+(pos >= 2.0*$pi) ? pos -= 2.0*$pi;
+
+
+)
+@block
+
+  while (
+    input = midirecv(mpos, msg1, msg23);
+    input  ? (
+      statusHi = (msg1/16)|0;
+      statusLo = (msg1-(statusHi*16))|0;
+
+      data2 = (msg23/256)|0;
+      data1 = (msg23-(data2*256))|0;
+
+// .... for Note Ons
+      statusHi == NOTE_ON && data2 > 0 ? (
+          last_note_on = 1;
+          slider10 = 440 * 2^((data1-69)/12);
+          adj = adjbase * slider10;
+          filter = (data1 < slider1 || data1 > slider2);
+          (!filter) ? (
+              midisend(mpos, msg1, msg23);
+          ):(
+              was_filtered[data1] = 1;
+          );
+      ):
+
+// .... for Note Offs
+      statusHi == NOTE_OFF || (statusHi == NOTE_ON && data2 == 0 ) ? (
+          last_note_on = 0;
+          was_filtered[data1] ? (
+              was_filtered[data1] = 0;
+          ):(
+              midisend(mpos, msg1, msg23);
+          );
+      ) : slider3 ? (
+          midisend(mpos, msg1, msg23);
+      );
+    );
+    input;
+  );
+
+
+
