@@ -7,6 +7,9 @@ desc:midi-audio polyphonic variable waveform synth
 
 slider1:-12<-120,6,1>Vol (dB)
 slider2:0<-100,100,1>Fine Tune (cents)
+slider3:1<1,10,1>Attack
+slider4:1<1,10,1>Decay
+slider5:0<-5,5,0.01>Wave shape
 
 in_pin:left input
 in_pin:right input
@@ -17,9 +20,9 @@ out_pin:right output
     NOTE_ON = 9;    
     note_adj = 1024;  // array for storing note adj values   
     note_pos = 2048;  // array for storing note pos
-    // TODO: add array for attack/volume
-    // TODO: use sign-flip for scheduling end of note (so we can fade our instead of cutting)
-
+    note_vel = 3072;  // array for storing velocity
+    note_vol = 4096; // array for storing note current env vol info
+    
     // note that the number is the position in memory of the top of the array
     // and it stores doubles!
 
@@ -27,17 +30,33 @@ out_pin:right output
 @slider
     vol=2 ^ (slider1/6);
     adjbase = 2.0*$pi*(2^(slider2/1200))/srate;
+    attack = 0.99^(1/(2^slider3));
+    decay = 0.99^(1/(2^slider4));
 
 @sample
 
     i=0;
     while(
-        adj = note_adj[i];
+        off = note_adj[i] < 0;
+        adj = abs(note_adj[i]);
         adj != 0 ? (
             pos = note_pos[i];
-            tone = sin(pos);
+            sp = sin(pos);
+            asp = abs(sp);
+            sps = sp > 0 ? 1 : -1;
+            tone = sps * asp^(2^slider5);
+
+            (! off && note_vol[i] < 1) ? (
+                note_vol[i] = 1 - (1 - note_vol[i])*attack;
+            );
             
-            tone *= vol;
+            (off && note_vol[i] > 0) ? (
+                note_vol[i] = note_vol[i]*decay;
+            );
+
+            (off && note_vol[i] == 0) ? (note_adj[i] = 0);
+            
+            tone *= vol * note_vel[i] * note_vol[i];
             spl0 = spl0+tone;
             spl1 = spl1+tone;
 
@@ -66,13 +85,14 @@ out_pin:right output
                 adj = adjbase * 440 * 2^((data1-69)/12);
 
                 note_adj[data1] = adj;
+                note_vel[data1] = data2/127;
+                note_pos[data1] = 0;
 
             ):
 
             // .... for Note Offs
             statusHi == NOTE_OFF || (statusHi == NOTE_ON && data2 == 0 ) ? (
-                note_adj[data1] = 0;
-                note_pos[data1] = 0;
+                note_adj[data1] = 0 - note_adj[data1];
             );
             midisend(mpos, msg1, msg23);
         );
