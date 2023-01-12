@@ -6,10 +6,12 @@ desc:midi-audio polyphonic variable waveform synth
 
 
 slider1:-12<-120,6,1>Vol (dB)
-slider2:0<-100,100,1>Fine Tune (cents)
+slider2:0<-200,200,0.1>Fine Tune (cents)
 slider3:1<1,10,1>Attack
 slider4:1<1,10,1>Decay
 slider5:0<-5,5,0.01>Wave shape
+slider6:0<0,0.1,0.01>Vibrato depth
+slider7:1<1,10,0.1>Vibrato freq
 
 in_pin:left input
 in_pin:right input
@@ -18,10 +20,11 @@ out_pin:right output
 @init
     NOTE_OFF = 8;
     NOTE_ON = 9;    
-    note_adj = 1024;  // array for storing note adj values   
+    note_stt = 1024;  // array for storing note adj values   
     note_pos = 2048;  // array for storing note pos
     note_vel = 3072;  // array for storing velocity
     note_vol = 4096; // array for storing note current env vol info
+    vibpos = 0;
     
     // note that the number is the position in memory of the top of the array
     // and it stores doubles!
@@ -29,17 +32,23 @@ out_pin:right output
 
 @slider
     vol=2 ^ (slider1/6);
-    adjbase = 2.0*$pi*(2^(slider2/1200))/srate;
+    adjbase = 440*2.0*$pi*(2^(slider2/1200))/srate;
+    vibadj = slider7*2.0*$pi/srate;
     attack = 0.99^(1/(2^slider3));
     decay = 0.99^(1/(2^slider4));
 
 @sample
 
-    i=0;
+    i=0;            
+    vibpos = vibpos + vibadj;
+    vib = slider6*sin(vibpos);
+    
     while(
-        off = note_adj[i] < 0;
-        adj = abs(note_adj[i]);
-        adj != 0 ? (
+        off = note_stt[i] < 0;
+        on = abs(note_stt[i]);
+        
+        
+        on != 0 ? (
             pos = note_pos[i];
             sp = sin(pos);
             asp = abs(sp);
@@ -54,12 +63,14 @@ out_pin:right output
                 note_vol[i] = note_vol[i]*decay;
             );
 
-            (off && note_vol[i] == 0) ? (note_adj[i] = 0);
+            (off && note_vol[i] == 0) ? (note_stt[i] = 0);
             
             tone *= vol * note_vel[i] * note_vol[i];
             spl0 = spl0+tone;
             spl1 = spl1+tone;
-
+            
+            
+            adj = adjbase * 2^((i-69)/12) * 2^vib;
             pos = pos + adj;
             (pos >= 2.0*$pi) ? pos -= 2.0*$pi;
             note_pos[i] = pos;
@@ -82,9 +93,8 @@ out_pin:right output
             // .... for Note Ons
             statusHi == NOTE_ON && data2 > 0 ? (
                 last_note_on = 1;
-                adj = adjbase * 440 * 2^((data1-69)/12);
 
-                note_adj[data1] = adj;
+                note_stt[data1] = 1;
                 note_vel[data1] = data2/127;
                 note_pos[data1] = 0;
 
@@ -92,7 +102,7 @@ out_pin:right output
 
             // .... for Note Offs
             statusHi == NOTE_OFF || (statusHi == NOTE_ON && data2 == 0 ) ? (
-                note_adj[data1] = 0 - note_adj[data1];
+                note_stt[data1] = 0 - note_stt[data1];
             );
             midisend(mpos, msg1, msg23);
         );
