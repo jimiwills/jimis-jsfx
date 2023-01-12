@@ -1,9 +1,6 @@
 desc:midi-audio polyphonic variable waveform synth
 //tags: MIDI Audio synth
-//author: Jicawi
-
-// TODO: transcribe my code from sonicstack
-
+//author: Jimi Wills
 
 slider1:-12<-120,6,1>Vol (dB)
 slider2:0<-200,200,0.1>Fine Tune (cents)
