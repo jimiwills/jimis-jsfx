@@ -1,29 +1,12 @@
-desc:midi-audio polyphonic tone generator
+desc:midi-audio polyphonic variable waveform synth
 //tags: MIDI Audio synth
 //author: Jicawi
 
-slider1:21<0,127,1>Lowest Key (MIDI Note #)
-slider2:108<0,127,1>Highest Key (MIDI Note #)
-slider3:0<0,1,1{No,Yes}>Other events (CC, etc) pass through
-
-// some of this comes from "tonegenerator"
-// This effect Copyright (C) 2004 and later Cockos Incorporated
-// License: LGPL - http://www.gnu.org/licenses/lgpl.html
-
-// and some comes from MIDI Note Filter (author Unknown)
+// TODO: transcribe my code from sonicstack
 
 
-desc: Tone Generator
-//tags: analysis generator synthesis
-//author: Cockos
-
-slider8:-12<-120,6,1>Wet Mix (dB)
-slider9:-6<-120,6,1>Dry Mix (dB)
-slider10:440<20,24000,1>Base Frequency (Hz)
-slider4:0<0,11,1{A,A#,B,C,C#,D,D#,E,F,F#,G,G#}>Note
-slider5:0<-4,4,1>Octave
-slider6:0<-100,100,1>Fine Tune (cents)
-slider7:0<0,2,1{Sine,Triangle,Saw}>Shape
+slider1:-12<-120,6,1>Vol (dB)
+slider2:0<-100,100,1>Fine Tune (cents)
 
 in_pin:left input
 in_pin:right input
@@ -34,14 +17,16 @@ out_pin:right output
     NOTE_ON = 9;    
     note_adj = 1024;  // array for storing note adj values   
     note_pos = 2048;  // array for storing note pos
+    // TODO: add array for attack/volume
+    // TODO: use sign-flip for scheduling end of note (so we can fade our instead of cutting)
+
     // note that the number is the position in memory of the top of the array
     // and it stores doubles!
 
 
 @slider
-    vol=2 ^ (slider8/6);
-    dry=2 ^ (slider9/6);
-    adjbase = 2.0*$pi*(2^(slider5+slider4/12+slider6/1200))/srate;
+    vol=2 ^ (slider1/6);
+    adjbase = 2.0*$pi*(2^(slider2/1200))/srate;
 
 @sample
 
@@ -50,19 +35,11 @@ out_pin:right output
         adj = note_adj[i];
         adj != 0 ? (
             pos = note_pos[i];
-            (slider7 < 0.67) ? (
-              tone = cos(pos);
-            ) :
-            (slider7 < 1.33) ? (
-              tone = 2.0*pos/$pi-1.0;
-              (tone > 1.0) ? tone = 2.0-tone;
-            ) : (
-              tone = 1.0-pos/$pi;
-            );
-
+            tone = sin(pos);
+            
             tone *= vol;
-            spl0 = tone+spl0*dry;
-            spl1 = tone+spl1*dry;
+            spl0 = spl0+tone;
+            spl1 = spl1+tone;
 
             pos = pos + adj;
             (pos >= 2.0*$pi) ? pos -= 2.0*$pi;
@@ -86,8 +63,7 @@ out_pin:right output
             // .... for Note Ons
             statusHi == NOTE_ON && data2 > 0 ? (
                 last_note_on = 1;
-                slider10 = 440 * 2^((data1-69)/12);
-                adj = adjbase * slider10;
+                adj = adjbase * 440 * 2^((data1-69)/12);
 
                 note_adj[data1] = adj;
 
@@ -96,6 +72,7 @@ out_pin:right output
             // .... for Note Offs
             statusHi == NOTE_OFF || (statusHi == NOTE_ON && data2 == 0 ) ? (
                 note_adj[data1] = 0;
+                note_pos[data1] = 0;
             );
             midisend(mpos, msg1, msg23);
         );
