@@ -54,9 +54,10 @@ out_pin:right output
             asp = abs(sp);
             sps = sp > 0 ? 1 : -1;
             tone = sps * asp^(2^slider5);
+            vel = note_vel[i];
 
             (! off && note_vol[i] < 1) ? (
-                note_vol[i] = 1 - (1 - note_vol[i])*attack;
+                note_vol[i] = vel - (vel - note_vol[i])*attack;
             );
             
             (off && note_vol[i] > 0) ? (
@@ -65,7 +66,7 @@ out_pin:right output
 
             (off && note_vol[i] == 0) ? (note_stt[i] = 0);
             
-            tone *= vol * note_vel[i] * note_vol[i];
+            tone *= vol * note_vol[i];
             spl0 = spl0+tone;
             spl1 = spl1+tone;
             
@@ -96,7 +97,6 @@ out_pin:right output
 
                 note_stt[data1] = 1;
                 note_vel[data1] = data2/127;
-                note_pos[data1] = 0;
 
             ):
 
