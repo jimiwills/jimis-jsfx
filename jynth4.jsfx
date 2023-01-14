@@ -1,0 +1,149 @@
+desc:midi-audio percussion synth
+//tags: MIDI Audio synth
+//author: Jimi Wills
+
+
+
+/*
+good approx values:
+
+Snare: length~1, decay~4, waveshape~0, freq.change~-2, note~C5
+Tom:  length~1-2.5, decay~4, waveshape~0,  freq.change~-0.3 to .-0.75, notes~C1 to C3
+Electro-tom: as for tom, but mess with the waveshape and lower the freq.change
+Kick: length~1, decay~0 to 5 (4 is good), waveshape~0, freq.change~-0.9, note~C0
+Less kicky kick: freq.change~-0.8 (Or just set decay to 10 and any other settings)
+
+Slapaphone: length~1, decay~4, waveshape~0, freq.change~0.33, any notes
+Chimes: length~10, decay~1.3, waveshape~5, freq.change~0, any notes
+Electic xylophone?  length~2, decay~4, waveshape~0 to 0.5, freq.change~0, any notes
+
+Ruler on desk  length~10, decay~4.5, waveshape~-5, freq.change~1, C2
+
+Whole bunch of nice stuff using: length~10, decay~3.5, waveshape~0.5 to 1.5, freq.change~0
+... can also disable sustain for this, with decay-shape 8 after note-off
+*/
+
+
+slider1:-12<-120,6,1>Vol (dB)
+slider2:0<-200,200,0.1>Fine Tune (cents)
+slider3:1<0.01,10,0.01>Note length
+slider4:0<-2,10,0.01>Decay shape
+slider5:0<-5,5,0.01>Wave shape
+slider6:0<0,0.1,0.01>Vibrato depth
+slider7:1<1,10,0.1>Vibrato freq
+slider8:0<-2,1,0.01>Freq change
+slider9:0<0,1,1{Enabled,Disabled}>Disable sustain
+
+in_pin:left input
+in_pin:right input
+out_pin:left output
+out_pin:right output    
+@init
+    NOTE_OFF = 8;
+    NOTE_ON = 9;    
+    note_stt = 1024;  // array for storing note pos
+    note_pos = 2048;  // array for storing note wave pos
+    note_vel = 3072;  // array for storing velocity
+    note = 4096; // array for storing actual note value
+    
+    note_i = 0;
+    
+    vibpos = 0;
+    
+    
+    // note that the number is the position in memory of the top of the array
+    // and it stores doubles!
+
+
+@slider
+    vol=2 ^ (slider1/6);
+    adjbase = 440*2.0*$pi*(2^(slider2/1200))/srate;
+    vibadj = slider7*2.0*$pi/srate;
+    //attack = 0.99^(1/(2^slider3));  
+    note_length_t = slider3;
+    note_length_s = note_length_t * srate; // samples
+    
+    decayshape = (2^slider4);
+    waveshape = (2^slider5);
+    fc = slider8;
+    fc_sign = fc < 0 ? -1 : 1;
+    fc_abs = abs(fc);
+    direction = fc*fc*fc;
+
+@sample
+
+    i=0;            
+    vibpos = vibpos + vibadj;
+    vibpos > 2*$pi ? (vibpos = vibpos - 2*$pi );
+    vib = slider6*sin(vibpos);
+    
+    while(
+        
+        note_stt[i] != 0 ? (
+            pos = note_pos[i];
+            
+            p = note_stt[i]/note_length_s; // proportion of note...
+            
+            d = note_stt[i] < 0 ? 8 : decayshape;
+            dec = (1-p)^decayshape;
+            
+            sp = sin(pos * p^direction);
+            asp = abs(sp);
+            sps = sp > 0 ? 1 : -1;
+            tone = sps * asp^waveshape;
+            vel = note_vel[i];
+            
+            tone *= vol * dec;
+            
+            spl0 = spl0+tone;
+            spl1 = spl1+tone;
+            
+            
+            adj = adjbase * 2^((note[i]-69)/12) * 2^vib;
+            pos = pos + adj;
+            note_pos[i] = pos;
+            note_stt[i] = note_stt[i] + 1;
+            (note_stt[i] > note_length_s  || dec == 0) ? (note_stt[i] = 0);
+        );
+        i=i+1;
+        i<1023;
+    );
+
+@block
+
+    while (
+        input = midirecv(mpos, msg1, msg23);
+        input ? (
+            statusHi = (msg1/16)|0;
+            statusLo = (msg1-(statusHi*16))|0;
+
+            data2 = (msg23/256)|0;
+            data1 = (msg23-(data2*256))|0;
+
+            // .... for Note Ons
+            statusHi == NOTE_ON && data2 > 0 ? (
+
+                note_i = note_i + 1;
+                note_i > 1023 ? note_i = 0;
+                
+                i = slider9 == 0 ? note_i : data1;
+                
+                note_stt[i] = 1;
+                note_vel[i] = data2/127;
+                note_pos[i] = 0;
+                note[i] = data1;
+
+            ):
+
+            // .... for Note Offs
+            (slider9 == 1 &&
+            statusHi == NOTE_OFF || (statusHi == NOTE_ON && data2 == 0 )) ? (
+                note_stt[data1] = note_stt[data1]-note_length_s;
+            );
+            midisend(mpos, msg1, msg23);
+        );
+        input;
+    );
+
+
+

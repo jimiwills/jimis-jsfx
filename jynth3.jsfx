@@ -38,6 +38,7 @@ out_pin:right output
 
     i=0;            
     vibpos = vibpos + vibadj;
+    vibpos > 2*$pi ? (vibpos = 0);
     vib = slider6*sin(vibpos);
     
     while(
