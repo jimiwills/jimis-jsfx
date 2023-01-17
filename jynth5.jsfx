@@ -38,7 +38,7 @@ out_pin:right output
     NOTE_OFF = 8;
     NOTE_ON = 9;    
     
-    max_number_nodes = 9;
+    max_number_nodes = 1;
     
     node_array_size = frame_size*max_number_nodes;
     
@@ -64,6 +64,7 @@ out_pin:right output
     drag = 0.9999;
     dampen = 0.999;
     
+    connectivity = 0;
     
     // note that the number is the position in memory of the top of the array
     // and it stores doubles!
@@ -102,7 +103,7 @@ out_pin:right output
             p = note_m[pi];
             
             (p < note_vel[i] && note_phase[i] == 0) ? (
-              note_m[pi] += note_vel[i] / plucksamples;
+              note_m[pi] += note_vel[i] / plucksamples; // TODO: pull the rest too
             );
             
             (p >= note_vel[i] && note_phase[i] == 0) ? (
@@ -129,7 +130,20 @@ out_pin:right output
                 left = j == 0 ? 0 : note_m[li];
                 right = j == number_nodes-1 ? 0 : note_m[ri];
                 
-                f = (-2)* note_m[ni] + left + right;
+                f = (-2)* note_m[ni] + left + right; // TODO: change this
+                // first back-up this version. With the single point of displacement on 
+                // line 106, this basically propagates the wave along the nodes, 
+                // which is why is sounds like a bell :)
+                // But I want it to sound like a string, so the nodes need connectivity...
+                // f = note_m[ni]
+                
+                A = left - note_m[ni];
+                B = right - note_m[ni];
+                fA = sign(A) * (sqrt(A^2 + connectivity^2) - connectivity);
+                fB = sign(B) * (sqrt(B^2 + connectivity^2) - connectivity);
+                // i.e: if connectivity is 0 it behaves like a bell and
+                //      if connectivity is 1 it behaves like a string
+                f = fA + fB;
                  
                 //point_tension = sqrt(note_tension^2 + (node_m[ni]*note_tension/10)^2);
                  
@@ -160,6 +174,8 @@ out_pin:right output
               j+=1;
               j<number_nodes
             );
+            //tone1 = note_m[i*max_number_nodes];
+            //tone2 = note_m[i*max_number_nodes+number_nodes-1];
             
             spl0 = spl0+tone1;
             spl1 = spl1+tone2;
