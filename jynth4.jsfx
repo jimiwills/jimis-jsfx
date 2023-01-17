@@ -33,6 +33,11 @@ slider6:0<0,0.1,0.01>Vibrato depth
 slider7:1<1,10,0.1>Vibrato freq
 slider8:0<-2,1,0.01>Freq change
 slider9:0<0,1,1{Enabled,Disabled}>Disable sustain
+slider10:0<0,1,0.01>Harmonics
+slider11:0<-5,5,0.01>Harmonic shape
+slider12:0<-1,1,0.01>Harmonic balance (odd/even)
+slider13:0<0,1,0.01>Subharmonics
+
 
 in_pin:left input
 in_pin:right input
@@ -69,6 +74,31 @@ out_pin:right output
     fc_sign = fc < 0 ? -1 : 1;
     fc_abs = abs(fc);
     direction = fc*fc*fc;
+    
+    oddness = slider12 < 0 ? 1 : 1-slider12;
+    evenness = slider12 > 0 ? 1 : 1+slider12;
+    
+    harmonicshape = (2^slider11);
+    h2s = slider10 * evenness * 0.9 ^ harmonicshape;
+    h3s = slider10 * oddness * 0.8 ^ harmonicshape;
+    h4s = slider10 * evenness * 0.7 ^ harmonicshape;
+    h5s = slider10 * oddness * 0.6 ^ harmonicshape;
+    h6s = slider10 * evenness * 0.5 ^ harmonicshape;
+    h7s = slider10 * oddness * 0.4 ^ harmonicshape;
+    
+    subharmonics = slider13;
+    
+    total = 1 + 2*subharmonics + h2s + h3s + h4s + h5s + h6s + h7s;
+    harmnorm = 1/total;
+    
+    subharmonics *= harmnorm;
+    h2s *= harmnorm;
+    h3s *= harmnorm;
+    h4s *= harmnorm;
+    h5s *= harmnorm;
+    h6s *= harmnorm;
+    h7s *= harmnorm;
+
 
 @sample
 
@@ -87,10 +117,58 @@ out_pin:right output
             d = note_stt[i] < 0 ? 8 : decayshape;
             dec = (1-p)^decayshape;
             
-            sp = sin(pos * p^direction);
+            ppd = pos * p^direction;
+            
+            sp = sin(ppd) * harmnorm;
+            shA = sin(ppd/2)*subharmonics;
+            shB = sin(ppd/4)*subharmonics;
+            sh2 = sin(ppd*2)*h2s;
+            sh3 = sin(ppd*3)*h3s;
+            sh4 = sin(ppd*4)*h4s;
+            sh5 = sin(ppd*5)*h5s;
+            sh6 = sin(ppd*6)*h6s;
+            sh7 = sin(ppd*7)*h7s;
+            
+            
+            
             asp = abs(sp);
-            sps = sp > 0 ? 1 : -1;
-            tone = sps * asp^waveshape;
+            sps = sign(sp);
+            
+            aspA = abs(shA);
+            spsA = sign(shA);
+                        
+            aspB = abs(shB);
+            spsB = sign(shB);
+            
+            asp2 = abs(sh2);
+            sps2 = sign(sh2);
+            
+            asp3 = abs(sh3);
+            sps3 = sign(sh3);
+            
+            asp4 = abs(sh4);
+            sps4 = sign(sh4);
+            
+            asp5 = abs(sh5);
+            sps5 = sign(sh5);
+            
+            asp6 = abs(sh6);
+            sps6 = sign(sh6);
+            
+            asp7 = abs(sh7);
+            sps7 = sign(sh7);
+            
+            
+            tone = sps * asp^waveshape
+                + spsA * aspA^waveshape
+                + spsB * aspB^waveshape
+                + sps2 * asp2^waveshape
+                + sps3 * asp3^waveshape
+                + sps4 * asp4^waveshape
+                + sps5 * asp5^waveshape
+                + sps6 * asp6^waveshape
+                + sps7 * asp7^waveshape;
+            
             vel = note_vel[i];
             
             tone *= vol * dec;
