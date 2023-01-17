@@ -115,7 +115,7 @@ out_pin:right output
             p = note_stt[i]/note_length_s; // proportion of note...
             
             d = note_stt[i] < 0 ? 8 : decayshape;
-            dec = (1-p)^decayshape;
+            dec = (1-p)^d;
             
             ppd = pos * p^direction;
             
